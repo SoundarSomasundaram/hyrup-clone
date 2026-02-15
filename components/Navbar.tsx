@@ -9,11 +9,7 @@ const Navbar: React.FC = () => {
         <div className="flex items-center gap-3">
           {/* Logo matching the original HYRUP aesthetic */}
           <div className="flex items-center">
-            <svg width="42" height="42" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M15 25C15 19.4772 19.4772 15 25 15H45V45H15V25Z" fill="#ff5c35"/>
-              <path d="M15 55H45V85H25C19.4772 85 15 80.5228 15 75V55Z" fill="#ff5c35"/>
-              <path d="M55 15H75C80.5228 15 85 19.4772 85 25V75C85 80.5228 80.5228 85 75 85H55V15Z" fill="#ff5c35"/>
-            </svg>
+            <img src="/logo.webp" alt="HYRUP Logo" className="w-[42px] h-[42px]" />
             <span className="text-4xl font-black tracking-tighter text-foreground ml-2">HYRUP</span>
           </div>
         </div>
