@@ -1,0 +1,5 @@
+{
+  "name": "HYRUP Clone",
+  "description": "A pixel-perfect clone of the HYRUP landing page, built with React, Tailwind CSS, and TypeScript, featuring a skill-based hiring platform theme.",
+  "requestFramePermissions": []
+}
