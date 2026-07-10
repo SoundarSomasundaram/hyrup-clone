@@ -216,7 +216,7 @@ Analyze the status field (e.g., 'closed', 'open', 'under_maintenance', etc.) and
     let response = result.response;
     
     // Check if Gemini requested to call functions
-    let functionCalls = response.functionCalls;
+    let functionCalls = response.functionCalls();
     
     // We execute function calls in a loop in case Gemini decides it needs another call after receiving the data
     let loopCount = 0;
@@ -273,7 +273,7 @@ Analyze the status field (e.g., 'closed', 'open', 'under_maintenance', etc.) and
       // Feed the function response back to Gemini
       const nextResult = await chat.sendMessage(functionResponses);
       response = nextResult.response;
-      functionCalls = response.functionCalls;
+      functionCalls = response.functionCalls();
     }
 
     const reply = response.text();
