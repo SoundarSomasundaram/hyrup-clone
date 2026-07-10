@@ -128,6 +128,11 @@ body {
   box-shadow: 0 0 6px var(--color-danger);
 }
 
+.status-dot.warning {
+  background-color: var(--color-warning);
+  box-shadow: 0 0 6px var(--color-warning);
+}
+
 /* Minimal Buttons */
 .btn {
   font-family: var(--font-family);

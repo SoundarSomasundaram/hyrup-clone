@@ -3,6 +3,104 @@ let stations = [];
 let selectedStation = null;
 let chatHistory = [];
 let isGenerating = false;
+let isMockMode = false;
+
+// Mock Stations Data for Static Build / Demo Mode
+const mockStations = [
+  {
+    id: 1121,
+    name: "Direction EV Station",
+    status: "closed",
+    no_of_charge_points: 4,
+    no_of_connectors: 8,
+    active_sessions: 0,
+    total_sessions: 1450,
+    total_energy_consumed: 24500,
+    address: {
+      address_line1: "Plot No. 45, Sector 18",
+      city: "Gurugram",
+      state: "Haryana",
+      pincode: "122015"
+    },
+    company: "Direction EV Ltd",
+    host: { name: "Rakesh Sharma" }
+  },
+  {
+    id: 6786,
+    name: "Grand Mall Charging Hub",
+    status: "under_maintenance",
+    no_of_charge_points: 2,
+    no_of_connectors: 4,
+    active_sessions: 0,
+    total_sessions: 890,
+    total_energy_consumed: 12400,
+    address: {
+      address_line1: "Lower Ground Floor, Grand Mall",
+      city: "Delhi",
+      state: "Delhi",
+      pincode: "110002"
+    },
+    company: "PowerGrid EV",
+    host: { name: "Mall Operations" }
+  },
+  {
+    id: 6788,
+    name: "Highway Fast Charger - NH48",
+    status: "open",
+    no_of_charge_points: 6,
+    no_of_connectors: 12,
+    active_sessions: 3,
+    total_sessions: 4200,
+    total_energy_consumed: 98000,
+    address: {
+      address_line1: "Mile 82, NH-48 Expressway",
+      city: "Jaipur",
+      state: "Rajasthan",
+      pincode: "302001"
+    },
+    company: "TruePower Networks",
+    host: { name: "Highway Plaza" }
+  },
+  {
+    id: 8990,
+    name: "Tech Park Charging Station",
+    status: "open",
+    no_of_charge_points: 8,
+    no_of_connectors: 16,
+    active_sessions: 7,
+    total_sessions: 12500,
+    total_energy_consumed: 310000,
+    address: {
+      address_line1: "Block C, Cyber Towers",
+      city: "Bengaluru",
+      state: "Karnataka",
+      pincode: "560001"
+    },
+    company: "TruePower Networks",
+    host: { name: "Cyber Towers Management" }
+  },
+  {
+    id: 9021,
+    name: "Downtown Shopping Center",
+    status: "open",
+    no_of_charge_points: 2,
+    no_of_connectors: 4,
+    active_sessions: 1,
+    total_sessions: 3120,
+    total_energy_consumed: 43200,
+    address: {
+      address_line1: "12 Church Street",
+      city: "Mumbai",
+      state: "Maharashtra",
+      pincode: "400001"
+    },
+    company: "ElectroCharge",
+    host: { name: "City Center Parking" }
+  }
+];
+
+const connectionStatusDot = document.getElementById('connectionStatusDot');
+const connectionStatusText = document.getElementById('connectionStatusText');
 
 // DOM Selectors
 const chatMessages = document.getElementById('chatMessages');
@@ -102,17 +200,21 @@ async function fetchStations() {
     
     // Check if result data is structured as data.stations
     stations = result?.data?.stations || result?.data || [];
+    isMockMode = false;
+    if (connectionStatusDot && connectionStatusText) {
+      connectionStatusDot.className = 'status-dot online';
+      connectionStatusText.textContent = 'Live Agent Console';
+    }
     renderStations(stations);
   } catch (error) {
-    console.error('Error fetching stations:', error);
-    stationsList.innerHTML = `
-      <div class="loading-state">
-        <span style="font-size: 2rem;">⚠️</span>
-        <p style="color: var(--color-danger)">Failed to fetch stations from API.</p>
-        <p style="font-size: 0.75rem;">Make sure your TruePower token is valid in settings.</p>
-        <button class="btn btn-secondary" onclick="fetchStations()" style="margin-top: 0.5rem;">Try Again</button>
-      </div>
-    `;
+    console.warn('Backend server unreachable or error. Switching to Demo Mode with mock data:', error);
+    isMockMode = true;
+    stations = mockStations;
+    if (connectionStatusDot && connectionStatusText) {
+      connectionStatusDot.className = 'status-dot warning';
+      connectionStatusText.textContent = 'Demo Mode (Mock API)';
+    }
+    renderStations(stations);
   }
 }
 
@@ -209,6 +311,140 @@ stationSearchInput.addEventListener('input', (e) => {
   renderStations(filtered);
 });
 
+// Helper for client-side direct Gemini calls
+async function callGeminiDirectlyFromBrowser(messageText, apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  
+  // Format current stations list simplified for LLM prompt
+  const cleanStations = stations.map(s => ({
+    id: s.id,
+    name: s.name,
+    status: s.status,
+    no_of_charge_points: s.no_of_charge_points,
+    no_of_connectors: s.no_of_connectors,
+    address: typeof s.address === 'object' ? `${s.address.address_line1 || ''}, ${s.address.city || ''}, ${s.address.state || ''}`.trim() : s.address,
+    company: s.company?.company_name || s.company || 'N/A',
+    host_name: s.host?.name || s.host_name || 'N/A'
+  }));
+
+  const systemInstructionText = `You are an EV Charging Customer Care assistant. You help support agents troubleshoot why users cannot charge their vehicles at specific stations.
+Here is the live data for all charging stations currently available:
+${JSON.stringify(cleanStations, null, 2)}
+
+Instructions:
+1. Explain clearly and concisely why charging might be failing based on the station details.
+2. If status is 'closed', explain that the station is currently closed and not accepting charges.
+3. If status is 'under_maintenance', explain it is down for maintenance.
+4. If status is 'open', explain that the station is online, and suggest checking connector connections or vehicle compatibility.
+5. Be polite, direct, and helpful. Mention the specific station name and its details in your explanation.`;
+
+  const contents = chatHistory.map(h => ({
+    role: h.role === 'model' ? 'model' : 'user',
+    parts: [{ text: h.text }]
+  }));
+  
+  contents.push({
+    role: 'user',
+    parts: [{ text: messageText }]
+  });
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: contents,
+      systemInstruction: {
+        parts: [{ text: systemInstructionText }]
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error?.message || 'Failed to call Gemini API directly');
+  }
+
+  const result = await response.json();
+  const textReply = result.candidates?.[0]?.content?.parts?.[0]?.text;
+  return {
+    reply: textReply || "No response received from Gemini.",
+    toolCalls: [
+      {
+        name: "get_stations_data_directly",
+        status: "success",
+        args: { reason: "loaded from browser state" },
+        result: stations
+      }
+    ]
+  };
+}
+
+// Helper for local mock responses when no API key is provided
+function generateLocalMockResponse(messageText) {
+  const query = messageText.toLowerCase();
+  let reply = "";
+  let toolCalls = [];
+
+  if (query.includes('list') || query.includes('show') || query.includes('all station')) {
+    toolCalls.push({
+      name: "list_stations",
+      status: "success",
+      args: {},
+      result: stations.map(s => ({ id: s.id, name: s.name, status: s.status }))
+    });
+    
+    reply = "Here are the EV charging stations currently in our directory:\n\n" + 
+            stations.map(s => `• **${s.name}** (ID: ${s.id}) — *${s.status.toUpperCase()}*`).join('\n') + 
+            "\n\nLet me know if you would like me to troubleshoot a specific station.";
+  } else {
+    let matchedStation = null;
+    for (const station of stations) {
+      if (query.includes(String(station.id)) || query.includes(station.name.toLowerCase().replace(' station', ''))) {
+        matchedStation = station;
+        break;
+      }
+    }
+
+    if (matchedStation) {
+      toolCalls.push({
+        name: "get_station_by_id",
+        status: "success",
+        args: { stationId: String(matchedStation.id) },
+        result: matchedStation
+      });
+
+      const status = matchedStation.status.toLowerCase();
+      if (status === 'closed') {
+        reply = `I have checked the status of **${matchedStation.name}** (ID: ${matchedStation.id}).\n\n` +
+                `🔴 The station status is currently **CLOSED**. This explains why the user is unable to charge. ` +
+                `Please inform the customer that the station is closed at this time. You can contact the site host, **${matchedStation.host?.name || matchedStation.host_name || 'N/A'}**, for operational hours.`;
+      } else if (status === 'under_maintenance' || status.includes('maintenance')) {
+        reply = `I have checked the details for **${matchedStation.name}** (ID: ${matchedStation.id}).\n\n` +
+                `⚠️ The station is currently **UNDER MAINTENANCE**. All charging points are temporarily offline. ` +
+                `Our technical team is working to resolve the issue as soon as possible. Please advise the user to navigate to the nearest available station.`;
+      } else {
+        reply = `I've retrieved the details for **${matchedStation.name}** (ID: ${matchedStation.id}).\n\n` +
+                `🟢 The station status is **OPEN** and functioning normally with ${matchedStation.no_of_charge_points || 0} active charge points.\n\n` +
+                `Since the station itself is online, the charging failure might be due to:\n` +
+                `1. A bad cable connection or physical connector damage.\n` +
+                `2. User authentication issues in their mobile app.\n` +
+                `3. Vehicle-side charging configuration.\n\n` +
+                `Ask the user to replug the cable or try another connector.`;
+      }
+    } else {
+      reply = `Hello! I am your TruePower EV Support Copilot.\n\n` +
+              `I can help you troubleshoot charging issues by querying our live database. Try asking:\n` +
+              `• *"Is Direction EV open?"*\n` +
+              `• *"Why is the user failing to charge at station 6786?"*\n` +
+              `• *"Show me all stations."*`;
+    }
+  }
+
+  return { reply, toolCalls };
+}
+
 // Chat logic
 async function submitChat(messageText) {
   if (isGenerating || !messageText.trim()) return;
@@ -228,26 +464,57 @@ async function submitChat(messageText) {
   const geminiApiKey = localStorage.getItem('gemini_api_key') || '';
   
   try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: messageText,
-        history: chatHistory,
-        geminiApiKey
-      })
-    });
+    let data;
+    
+    if (isMockMode) {
+      await new Promise(resolve => setTimeout(resolve, 800)); // natural delay
+      if (geminiApiKey) {
+        data = await callGeminiDirectlyFromBrowser(messageText, geminiApiKey);
+      } else {
+        data = generateLocalMockResponse(messageText);
+      }
+    } else {
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: messageText,
+            history: chatHistory,
+            geminiApiKey
+          })
+        });
+        
+        const responseText = await response.text();
+        if (!response.ok) {
+          let errMessage = 'Server error';
+          try {
+            const parsed = JSON.parse(responseText);
+            errMessage = parsed.error || errMessage;
+          } catch(e) {}
+          throw new Error(errMessage);
+        }
+        data = JSON.parse(responseText);
+      } catch (backendError) {
+        console.warn('Backend chat failed, switching to client-side direct/mock chat:', backendError);
+        isMockMode = true;
+        if (connectionStatusDot && connectionStatusText) {
+          connectionStatusDot.className = 'status-dot warning';
+          connectionStatusText.textContent = 'Demo Mode (Mock API)';
+        }
+        
+        if (geminiApiKey) {
+          data = await callGeminiDirectlyFromBrowser(messageText, geminiApiKey);
+        } else {
+          data = generateLocalMockResponse(messageText);
+        }
+      }
+    }
     
     // Remove typing indicator
     typingIndicator.remove();
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error || 'Server responded with an error');
-    }
     
     // Append LLM reply
     appendMessage('model', data.reply);
