@@ -130,6 +130,7 @@ const settingsModal = document.getElementById('settingsModal');
 const closeSettingsModalBtn = document.getElementById('closeSettingsModalBtn');
 const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
 const truepowerTokenInput = document.getElementById('truepowerTokenInput');
+const mockModeCheckbox = document.getElementById('mockModeCheckbox');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const clearSettingsBtn = document.getElementById('clearSettingsBtn');
 
@@ -142,17 +143,23 @@ const closeLogsBtn = document.getElementById('closeLogsBtn');
 function loadSettings() {
   const apiKey = localStorage.getItem('gemini_api_key') || '';
   const token = localStorage.getItem('truepower_token') || '';
+  const useMock = localStorage.getItem('use_mock_mode') === 'true';
   
   geminiApiKeyInput.value = apiKey;
   if (token) {
     truepowerTokenInput.value = token;
   }
+  if (mockModeCheckbox) {
+    mockModeCheckbox.checked = useMock;
+  }
+  isMockMode = useMock;
 }
 
 // Save settings to LocalStorage
 function saveSettings() {
   const apiKey = geminiApiKeyInput.value.trim();
   const token = truepowerTokenInput.value.trim();
+  const useMock = mockModeCheckbox ? mockModeCheckbox.checked : false;
   
   if (apiKey) {
     localStorage.setItem('gemini_api_key', apiKey);
@@ -166,6 +173,9 @@ function saveSettings() {
     localStorage.removeItem('truepower_token');
   }
   
+  localStorage.setItem('use_mock_mode', useMock);
+  isMockMode = useMock;
+  
   settingsModal.style.display = 'none';
   showSystemMessage('Settings saved. Refreshing station list...');
   fetchStations();
@@ -175,8 +185,13 @@ function saveSettings() {
 function clearSettings() {
   localStorage.removeItem('gemini_api_key');
   localStorage.removeItem('truepower_token');
+  localStorage.removeItem('use_mock_mode');
   geminiApiKeyInput.value = '';
   truepowerTokenInput.value = '';
+  if (mockModeCheckbox) {
+    mockModeCheckbox.checked = false;
+  }
+  isMockMode = false;
   settingsModal.style.display = 'none';
   showSystemMessage('Settings reset to default. Refreshing station list...');
   fetchStations();
@@ -190,6 +205,17 @@ async function fetchStations() {
       <p>Fetching live stations from TruePower...</p>
     </div>
   `;
+  
+  // If explicitly in Mock Mode, skip calling the backend APIs entirely
+  if (isMockMode) {
+    stations = mockStations;
+    if (connectionStatusDot && connectionStatusText) {
+      connectionStatusDot.className = 'status-dot warning';
+      connectionStatusText.textContent = 'Demo Mode (Mock API)';
+    }
+    renderStations(stations);
+    return;
+  }
   
   try {
     const response = await fetch('/api/stations');
